@@ -1,0 +1,488 @@
+"""
+
+	Author: Khagay Nagdimov 
+	Professor and Class: Katz, CS-3224  (Introduction to Operating Systems)
+	
+	This file will perform a check on the file system. Please note that the statements are written in repy v1 and NOT repy v2, this distinction is important because the functions used between the two are DIFFERENT. 
+
+	When interpreting this file, make sure the blocks of the filesystem are in directory that you are currently working in.  
+
+	If you are using the precursor to this file, csefsck.mix, to compile this code, enter in the command-line interpreter:  
+		"python repypp.py csefsck.mix csefsck.repy"
+	Then to interpret the csefsck.repy file enter in the command-line interpreter:
+		"python repy.py restrictions.test csefsck.repy"
+	The repypp.py, repy.py, restrictions.test should be in the seattle_repy folder, which is located in the seattle folder. 
+
+        However if you are using the csefsck.repy file, enter in the command-line interpreter:
+                "python repy.py restrictions.test csefsck.repy"
+
+	 The main functions of this file are towards the bottom 
+"""
+
+#begin include serialize.repy
+"""
+Author: Justin Cappos
+
+
+Start date: October 9th, 2009
+
+Purpose: A simple library that serializes and deserializes built-in repy types.
+This includes strings, integers, floats, booleans, None, complex, tuples, 
+lists, sets, frozensets, and dictionaries.
+
+There are no plans for including objects.
+
+Note: that all items are treated as separate references.   This means things
+like 'a = []; a.append(a)' will result in an infinite loop.   If you have
+'b = []; c = (b,b)' then 'c[0] is c[1]' is True.   After deserialization 
+'c[0] is c[1]' is False.
+
+I can add support or detection of this if desired.
+"""
+
+# The basic idea is simple.   Say the type (a character) followed by the 
+# type specific data.    This is adequate for simple types
+# that do not contain other types.   Types that contain other types, have
+# a length indicator and then the underlying items listed sequentially.   
+# For a dict, this is key1value1key2value2.
+
+
+
+def serialize_serializedata(data):
+  """
+   <Purpose>
+      Convert a data item of any type into a string such that we can 
+      deserialize it later.
+
+   <Arguments>
+      data: the thing to seriailize.   Can be of essentially any type except
+            objects.
+
+   <Exceptions>
+      TypeError if the type of 'data' isn't allowed
+
+   <Side Effects>
+      None.
+
+   <Returns>
+      A string suitable for deserialization.
+  """
+
+  # this is essentially one huge case statement...
+
+  # None
+  if type(data) == type(None):
+    return 'N'
+
+  # Boolean
+  elif type(data) == type(True):
+    if data == True:
+      return 'BT'
+    else:
+      return 'BF'
+
+  # Integer / Long
+  elif type(data) is int or type(data) is long:
+    datastr = str(data) 
+    return 'I'+datastr
+
+
+  # Float
+  elif type(data) is float:
+    datastr = str(data) 
+    return 'F'+datastr
+
+
+  # Complex
+  elif type(data) is complex:
+    datastr = str(data) 
+    if datastr[0] == '(' and datastr[-1] == ')':
+      datastr = datastr[1:-1]
+    return 'C'+datastr
+
+
+
+  # String
+  elif type(data) is str:
+    return 'S'+data
+
+
+  # List or tuple or set or frozenset
+  elif type(data) is list or type(data) is tuple or type(data) is set or type(data) is frozenset:
+    # the only impact is the first letter...
+    if type(data) is list:
+      mystr = 'L'
+    elif type(data) is tuple:
+      mystr = 'T'
+    elif type(data) is set:
+      mystr = 's'
+    elif type(data) is frozenset:
+      mystr = 'f'
+    else:
+      raise Exception("InternalError: not a known type after checking")
+
+    for item in data:
+      thisitem = serialize_serializedata(item)
+      # Append the length of the item, plus ':', plus the item.   1 -> '2:I1'
+      mystr = mystr + str(len(thisitem))+":"+thisitem
+
+    mystr = mystr + '0:'
+
+    return mystr
+
+
+  # dict
+  elif type(data) is dict:
+    mystr = 'D'
+
+    keysstr = serialize_serializedata(data.keys())
+    # Append the length of the list, plus ':', plus the list.  
+    mystr = mystr + str(len(keysstr))+":"+keysstr
+    
+    # just plop the values on the end.
+    valuestr = serialize_serializedata(data.values())
+    mystr = mystr + valuestr
+
+    return mystr
+
+
+  # Unknown!!!
+  else:
+    raise TypeError("Unknown type '"+str(type(data))+"' for data :"+str(data))
+
+
+
+def serialize_deserializedata(datastr):
+  """
+   <Purpose>
+      Convert a serialized data string back into its original types.
+
+   <Arguments>
+      datastr: the string to deseriailize.
+
+   <Exceptions>
+      ValueError if the string is corrupted
+      TypeError if the type of 'data' isn't allowed
+
+   <Side Effects>
+      None.
+
+   <Returns>
+      Items of the original type
+  """
+
+  if type(datastr) != str:
+    raise TypeError("Cannot deserialize non-string of type '"+str(type(datastr))+"'")
+  typeindicator = datastr[0]
+  restofstring = datastr[1:]
+
+  # this is essentially one huge case statement...
+
+  # None
+  if typeindicator == 'N':
+    if restofstring != '':
+      raise ValueError("Malformed None string '"+restofstring+"'")
+    return None
+
+  # Boolean
+  elif typeindicator == 'B':
+    if restofstring == 'T':
+      return True
+    elif restofstring == 'F':
+      return False
+    raise ValueError("Malformed Boolean string '"+restofstring+"'")
+
+  # Integer / Long
+  elif typeindicator == 'I':
+    try:
+      return int(restofstring) 
+    except ValueError:
+      raise ValueError("Malformed Integer string '"+restofstring+"'")
+
+
+  # Float
+  elif typeindicator == 'F':
+    try:
+      return float(restofstring) 
+    except ValueError:
+      raise ValueError("Malformed Float string '"+restofstring+"'")
+
+  # Float
+  elif typeindicator == 'C':
+    try:
+      return complex(restofstring) 
+    except ValueError:
+      raise ValueError("Malformed Complex string '"+restofstring+"'")
+
+
+
+  # String
+  elif typeindicator == 'S':
+    return restofstring
+
+  # List / Tuple / set / frozenset / dict
+  elif typeindicator == 'L' or typeindicator == 'T' or typeindicator == 's' or typeindicator == 'f':
+    # We'll split this and keep adding items to the list.   At the end, we'll
+    # convert it to the right type
+
+    thislist = []
+
+    data = restofstring
+    # We'll use '0:' as our 'end separator'
+    while data != '0:':
+      lengthstr, restofdata = data.split(':', 1)
+      length = int(lengthstr)
+
+      # get this item, convert to a string, append to the list.
+      thisitemdata = restofdata[:length]
+      thisitem = serialize_deserializedata(thisitemdata)
+      thislist.append(thisitem)
+
+      # Now toss away the part we parsed.
+      data = restofdata[length:]
+
+    if typeindicator == 'L':
+      return thislist
+    elif typeindicator == 'T':
+      return tuple(thislist)
+    elif typeindicator == 's':
+      return set(thislist)
+    elif typeindicator == 'f':
+      return frozenset(thislist)
+    else:
+      raise Exception("InternalError: not a known type after checking")
+
+
+  elif typeindicator == 'D':
+
+    lengthstr, restofdata = restofstring.split(':', 1)
+    length = int(lengthstr)
+
+    # get this item, convert to a string, append to the list.
+    keysdata = restofdata[:length]
+    keys = serialize_deserializedata(keysdata)
+
+    # The rest should be the values list.
+    values = serialize_deserializedata(restofdata[length:])
+
+    if type(keys) != list or type(values) != list or len(keys) != len(values):
+      raise ValueError("Malformed Dict string '"+restofstring+"'")
+    
+    thisdict = {}
+    for position in xrange(len(keys)):
+      thisdict[keys[position]] = values[position]
+    
+    return thisdict
+
+
+
+
+  # Unknown!!!
+  else:
+    raise ValueError("Unknown typeindicator '"+str(typeindicator)+"' for data :"+str(restofstring))
+
+
+
+
+#end include serialize.repy
+
+
+
+def csefsck():
+
+        checkId()
+	checkTimes()
+        checkFreeBlockList()
+	validFreeBlockList = checkFilenameToInodeDict()
+	
+	if validFreeBlockList == 1:
+	  print "Each directory has a . and .. entry. Also, the block numbers are correct."
+        validLinkCount = checkLinkCount()
+
+        if validLinkCount == 1:
+          print "The linkcount matches the number of entires in the filename_to_inode_dict."
+
+	validLocation = checkLocationIndirec()
+	if validLocation == 1:
+	  print "The indirect is one for every file that has its location pointing to an array." 
+
+	isSizeValid = validSize()
+        if isSizeValid == 1:
+	  print "The size of each file is properly allocated."
+
+
+def checkId():
+  	lindFsCalls = open("linddata.0", "r")   #checking if the device id is correct
+	lindFsCallsString = lindFsCalls.read()
+	de_lindFsCallsString = serialize_deserializedata(lindFsCallsString)
+	if de_lindFsCallsString["dev_id"] == 20: 
+		print "The Device Id is 20"
+	else:
+		print "The device id is NOT 20, an error has occured."
+
+def checkTimes():
+
+  	lindFsCalls = open("linddata.0", "r") 
+        lindFsCallsString = lindFsCalls.read()
+	de_lindFsCallsString = serialize_deserializedata(lindFsCallsString)
+	if de_lindFsCallsString["creationTime"] == 1376483073:  # check if the times are in the past 
+		lindFsCalls.close()
+		lindFsCalls = open("linddata.26", "r")
+		lindFsCallsString = lindFsCalls.read()
+		de_lindFsCallsString = serialize_deserializedata(lindFsCallsString)
+		if de_lindFsCallsString["ctime"] == 1323630836:
+			print "All times are in the past, nothing is in the future"	
+	else:
+		print "The times are NOT in the past, an error has occured." 
+		lindFsCalls.close()
+
+
+def checkFreeBlockList():
+	freeBlockListAggregate = [] # check if the free block list is accurate 
+	for i in range(0,27):
+		freeBlockListAggregate.append(1)
+	for i in range(1,26):
+		lindFsCalls = open("%s%d" % ("linddata.", i), "r") 
+		lindFsCallsString = lindFsCalls.read()
+		de_lindFsCallsString = serialize_deserializedata(lindFsCallsString)
+		for j in de_lindFsCallsString:
+			freeBlockListAggregate.append(j)
+		lindFsCalls.close()
+	keepTrack = 0  	
+	if len(freeBlockListAggregate) == 10000: # are all the free blocks stored in the free block list
+		for i in range(0,10000):		
+			if( freeBlockListAggregate[i] == 0):
+				try:				
+					fileExists = open("%s%d" % ("linddata.", i), "r")
+					print i 
+					print "The free block list is NOT accurate, there are files/directories stored on items that listed in the free block list." 
+				except: # if an error occurs, the file does not exist
+					keepTrack += 1  # keep track of how many files do not exist      
+	else:
+		print "The free block list is NOT accurate."
+	
+	""" check to see if the total number of free blocks is equal to the number of errors encountered. They should be the same"""
+	numberofFree = 0
+	for i in freeBlockListAggregate: 	
+		 if (i == 0):
+			numberofFree += 1 
+	if numberofFree == keepTrack:
+		print "The free block list is accurate."
+
+
+def checkFilenameToInodeDict(block=26): # recursive function
+
+  currentFile = open("%s%d" % ('linddata.', block),'r')
+  currentFileSerialized = currentFile.read()
+  currentFileUnserialized = serialize_deserializedata(currentFileSerialized)
+  counter = 0
+  for i in currentFileUnserialized['filename_to_inode_dict']:
+     counter += 1
+  #test that there are entries other than d. and d.. in this file 
+  if counter > 2: 
+    try:
+      if not(IS_CHR(currentFileUnserialized['filename_to_inode_dict']['d.'])):
+        if not(IS_CHR( currentFileUnserialized['filename_to_inode_dict']['d..'])):
+          for i in currentFileUnserialized['filename_to_inode_dict']:
+            #check that we're NOT looking at the d. and d.. entries because that has already been done.
+            if (i[1] != "."):   
+              checkFileFileName(currentFileUnserialized['filename_to_inode_dict']['d.'])
+	      return 1 
+    except:
+      print "An error occured: the d. or d.. entry does not exist."
+  if counter == 2:
+    return 1 
+  currentFile.close()
+
+
+
+def checkLinkCount(block=26):  # recursive function 
+  currentFile = open("%s%d" % ('linddata.', block),'r')
+  currentFileSerialized = currentFile.read()
+  currentFileUnserialized = serialize_deserializedata(currentFileSerialized)
+  try:
+    counter = 0
+    for i in currentFileUnserialized['filename_to_inode_dict']:
+      counter += 1     
+      if (i[1] != "."):   
+        if (counter == currentFileUnserialized['linkcount']): 
+          checkLinkCount(currentFileUnserialized['filename_to_inode_dict'][i])
+          return 1
+  except:
+    print "An error occured: a directory's linkcount does not match the number of entries in the filename_to_inode_dict."
+
+  currentFile.close()
+
+
+
+def checkLocationIndirec(block=26): # another recursive function 
+  currentFile = open ("%s%d" % ('linddata.',block), 'r')
+  currentFileSerialized = currentFile.read()
+  currentFileUnserialized = serialize_deserializedata(currentFileSerialized)
+  try:
+    for i in currentFileUnserialized['filename_to_inode_dict']:
+      if (i[1] != "."):  	
+        if(i[0] == 'f'):
+          nextFileInode = currentFileUnserialized[i]
+          currentFile.close()
+          nextFile = open("%s%d" % ('linddata.',i),'r')
+          nextFileSerialized = nextFile.read()
+          nextFileUnserialized = serialize_deserializedata(nextFileSerialized)
+          locationFile = nextFileUnserialized['location']
+          nextFile.close()
+       
+          theFilesText = open("%s%d" % ('linddata.', locationFile),'r')
+          theFilesTextSerialized = theFilesText.read()
+          theFilesTextUnserialized = serialize_deserializedata(theFilesTextSerialized)
+          # test if the data is an array 
+          if theFilesTextUnserialized[0] == '[':
+	    return 1 
+        else:
+          checkLocationIndirec(currentFileUnserialized['filename_to_inode_dict'][i])
+  except:
+    print "An error has occured: there exists a file that has its location point to an array YET its indirect is still one."
+  
+
+
+def validSize(block = 26): #recursive function 
+  currentFile = open ("%s%d" % ('linddata.',block), 'r')
+  currentFileSerialized = currentFile.read()
+  currentFileUnserialized = serialize_deserializedata(currentFileSerialized)
+  try:
+    for i in currentFileUnserialized['filename_to_inode_dict']:
+      if (i[1] != "."):  	
+        if(i[0] == 'f'):  
+          nextFileInode = currentFileUnserialized[i]
+          currentFile.close()
+          nextFile = open("%s%d" % ('linddata.',i),'r')
+          nextFileSerialized = nextFile.read()
+          nextFileUnserialized = serialize_deserializedata(nextFileSerialized)
+          locationFile = nextFileUnserialized['location']
+          nextFile.close()
+       
+          theFilesText = open("%s%d" % ('linddata.', locationFile),'r')
+          theFilesTextSerialized = theFilesText.read()
+          theFilesTextUnserialized = serialize_deserializedata(theFilesTextSerialized)
+
+	  # test the size of the file
+   	  if(theFilesTextUnserialized['size'] < 4096):
+	    if theFilesTextUnserialized['indirect'] == 0:
+	      pass 
+          elif(theFilesTextUnserialized['indirect'] != 0):
+	    nextBlock = theFilesTextUnserialized['location'] 
+	    theFilesText.close()
+ 	    nextBlocksLocation = open("%s%d" % ('linddata.',nextBlock), 'r')
+	    nextBlocksLocationSerialized = nextBlocksLocation.read()
+	    nextBlocksLocationUnserialized = serialize_deserializedata(nextBlocksLocationSerialized)
+          else: 
+	    print "An error has occured: the size of a file/files is not properly allocated for."
+        else:
+         checkLocationIndirec(currentFileUnserialized['filename_to_inode_dict'][i])
+          
+  except:
+    print "An error has occured: the size of a file/files is not properly allocated for."
+
+csefsck()
+
+
+
