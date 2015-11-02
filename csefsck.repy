@@ -1,6 +1,6 @@
 """
 
-	Author: Khagay Nagdimov 
+	Author: Manish Reddy Chinthalaphani
 	Professor and Class: Katz, CS-3224  (Introduction to Operating Systems)
 	
 	This file will perform a check on the file system. Please note that the statements are written in repy v1 and NOT repy v2, this distinction is important because the functions used between the two are DIFFERENT. 
@@ -24,7 +24,7 @@
 Author: Justin Cappos
 
 
-Start date: October 9th, 2009
+Start date: October 9th, 2014
 
 Purpose: A simple library that serializes and deserializes built-in repy types.
 This includes strings, integers, floats, booleans, None, complex, tuples, 
